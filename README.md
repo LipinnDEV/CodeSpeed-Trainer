@@ -8,7 +8,7 @@ O projeto utiliza palavras em português e termos relacionados à tecnologia e a
 
 O objetivo do jogo é digitar as palavras apresentadas na tela o mais rápido possível, tentando manter uma boa precisão e aumentar a pontuação.
 
-Durante a partida, o jogador pode acompanhar seu:
+Durante a partida, o jogador pode acompanhar:
 
 - Tempo
 - Pontuação
