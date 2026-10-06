@@ -14,13 +14,13 @@ Durante a partida, o jogador pode acompanhar:
 - Pontuação
 - Combo
 - Melhor combo
-- Precisão
+  - Precisão
 - WPM
 - XP
 - Moedas
 - Nível
 
-## Tecnologias utilizadas
+Tecnologias utilizadas 
 
 - React
 - TypeScript
@@ -44,7 +44,7 @@ Os níveis disponíveis são:
 - Diamante
 - Lendário
 
-### Modos de jogo
+## Modos de jogo
 
 O jogo possui três opções de tempo:
 
