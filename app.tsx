@@ -4,13 +4,13 @@ const PALAVRAS = {
   facil: [
     "casa", "mesa", "porta", "janela", "carro", "gato", "cachorro", "praia", "sol", "chuva",
     "livro", "caneta", "escola", "amigo", "família", "banana", "maçã", "futebol", "música", "filme",
-    "tempo", "verde", "azul", "pão", "café", "bola", "rua", "cidade", "jogo", "noite",
+    "tempo", "verde", "azul", "pão", "café", "bola", "rua", "cidade", "jogo", "noite", "cotonete", "jogo",
   ],
   medio: [
     "javascript", "backend", "frontend", "algoritmo", "relatório", "dashboard", "faculdade",
     "produtividade", "otimização", "infraestrutura", "desenvolvimento", "persistência",
     "conhecimento", "performance", "repositório", "componente", "variável", "servidor",
-    "requisição", "interface", "biblioteca", "framework",
+    "requisição", "interface", "biblioteca", "framework", "System", "out", "print",
   ],
   dificil: [
     "cybersecurity", "escalabilidade", "criptografia", "virtualização", "responsabilidade",
