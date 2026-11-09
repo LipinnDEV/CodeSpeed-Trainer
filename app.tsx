@@ -1,25 +1,55 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-/* ---------- Palavras ---------- */
-const PALAVRAS = {
+
+/* ============================================================
+   CodeSpeed Trainer ULTIMATE — v3
+   ============================================================ */
+
+/* ---------- Listas de palavras ---------- */
+
+type ListaPalavras = { facil: string[]; medio: string[]; dificil: string[] };
+
+// Importante: nenhuma palavra pode conter espaço (o espaço envia a palavra).
+const PALAVRAS: ListaPalavras = {
   facil: [
     "casa", "mesa", "porta", "janela", "carro", "gato", "cachorro", "praia", "sol", "chuva",
     "livro", "caneta", "escola", "amigo", "família", "banana", "maçã", "futebol", "música", "filme",
-    "tempo", "verde", "azul", "pão", "café", "bola", "rua", "cidade", "jogo", "noite", "cotonete", "jogo",
+    "tempo", "verde", "azul", "pão", "café", "bola", "rua", "cidade", "jogo", "noite",
   ],
   medio: [
     "javascript", "backend", "frontend", "algoritmo", "relatório", "dashboard", "faculdade",
     "produtividade", "otimização", "infraestrutura", "desenvolvimento", "persistência",
     "conhecimento", "performance", "repositório", "componente", "variável", "servidor",
-    "requisição", "interface", "biblioteca", "framework", "System", "out", "print",
+    "requisição", "interface", "biblioteca", "framework",
   ],
   dificil: [
     "cybersecurity", "escalabilidade", "criptografia", "virtualização", "responsabilidade",
-    "empreendedorismo", "extraordinariamente", "internacionalização", "inteligência artificial",
+    "empreendedorismo", "extraordinariamente", "internacionalização", "inteligência",
     "microsserviços", "autenticação", "refatoração", "documentação", "sincronização",
   ],
 };
 
+// Modo código: maiúsculas, minúsculas e símbolos contam.
+const CODIGO: ListaPalavras = {
+  facil: [
+    "const", "let", "var", "if", "else", "for", "while", "return", "class", "new",
+    "int", "void", "null", "true", "false", "SELECT", "WHERE", "git", "npm", "try",
+  ],
+  medio: [
+    "useState", "useEffect", "console.log()", "function()", "import", "export", "async", "await",
+    "String[]", "ArrayList", "@Override", "private", "public", "static", "INSERT", "UPDATE",
+    "DELETE", "VARCHAR(255)", "COUNT(*)", "localStorage", "JSON.parse()", "docker",
+  ],
+  dificil: [
+    "System.out.println();", "useMemo(()=>{},[])", "@Autowired", "@RestController",
+    "@GetMapping('/')", "Promise.all([])", "AUTO_INCREMENT", "CURRENT_TIMESTAMP",
+    "ResponseEntity", "SpringApplication.run()", "document.getElementById()",
+    "addEventListener()", "BufferedReader", "NullPointerException", "IllegalArgumentException",
+  ],
+};
+
 /* ---------- Tipos ---------- */
+
+type TipoJogo = "palavras" | "codigo";
 
 type RankingPlayer = {
   nome: string;
@@ -28,6 +58,7 @@ type RankingPlayer = {
   wpm: number;
   precisao: number;
   modo?: number;
+  tipo?: TipoJogo;
   data?: string;
 };
 
@@ -37,6 +68,7 @@ type HistoricoPartida = {
   wpm: number;
   precisao: number;
   melhorCombo: number;
+  tipo?: TipoJogo;
   palavra?: string;
 };
 
@@ -60,9 +92,12 @@ type Resultado = {
   moedas: number;
   novoRecorde: boolean;
   novas: string[];
+  nivelNovo?: string;
 };
 
 type Aba = "jogar" | "ranking" | "historico" | "conquistas" | "loja";
+
+type Som = "acerto" | "erro" | "combo" | "fim";
 
 /* ---------- Constantes ---------- */
 
@@ -104,6 +139,8 @@ type ContextoConquista = {
   wpm: number;
   precisao: number;
   partidas: number;
+  tipo: TipoJogo;
+  modoTempo: number;
 };
 
 const CONQUISTAS: { id: string; titulo: string; descricao: string; ok: (c: ContextoConquista) => boolean }[] = [
@@ -114,11 +151,14 @@ const CONQUISTAS: { id: string; titulo: string; descricao: string; ok: (c: Conte
   { id: "wpm40", titulo: "🚀 Velocista", descricao: "Chegue a 40 WPM (mín. 10 acertos)", ok: (c) => c.wpm >= 40 && c.acertos >= 10 },
   { id: "perfeito", titulo: "🎯 Precisão total", descricao: "100% de precisão com 20+ acertos", ok: (c) => c.precisao === 100 && c.acertos >= 20 },
   { id: "veterano", titulo: "🛡️ Veterano", descricao: "Jogue 10 partidas", ok: (c) => c.partidas >= 10 },
+  { id: "dev", titulo: "💻 Dev de verdade", descricao: "Acerte 15 trechos de código em uma partida", ok: (c) => c.tipo === "codigo" && c.acertos >= 15 },
+  { id: "maratona", titulo: "🏃 Maratonista", descricao: "Acerte 30 palavras no Modo Extremo (120s)", ok: (c) => c.modoTempo === 120 && c.acertos >= 30 },
 ];
 
 const CHAVES_STORAGE = [
   "nickname-player", "avatar-player", "recorde-player", "historico-player", "ranking-ultimate",
-  "xp-total", "moedas-total", "conquistas-player", "destaque-player", "destaques-comprados", "tema-escuro",
+  "xp-total", "moedas-total", "conquistas-player", "destaque-player", "destaques-comprados",
+  "tema-escuro", "tipo-jogo", "modo-tempo", "som-ligado",
 ];
 
 /* ---------- Funções auxiliares ---------- */
@@ -185,30 +225,40 @@ export default function App() {
   const [destaqueId, setDestaqueId] = useStored<DestaqueId>("destaque-player", "verde");
   const [comprados, setComprados] = useStored<DestaqueId[]>("destaques-comprados", ["verde"]);
   const [temaEscuro, setTemaEscuro] = useStored<boolean>("tema-escuro", true);
+  const [tipoSalvo, setTipo] = useStored<TipoJogo>("tipo-jogo", "palavras");
+  const [modo, setModo] = useStored<number>("modo-tempo", 60);
+  const [som, setSom] = useStored<boolean>("som-ligado", true);
+
+  const tipo: TipoJogo = tipoSalvo === "codigo" ? "codigo" : "palavras";
 
   // Estado da partida
   const [jogando, setJogando] = useState(false);
-  const [modo, setModo] = useState(60);
+  const [contagem, setContagem] = useState<number | null>(null);
+  const [pausado, setPausado] = useState(false);
   const [tempo, setTempo] = useState(60);
   const [decorrido, setDecorrido] = useState(0);
   const [palavra, setPalavra] = useState("");
+  const [proxima, setProxima] = useState("");
   const [digitado, setDigitado] = useState("");
   const [jogo, setJogo] = useState<Jogo>(JOGO_INICIAL);
   const [erro, setErro] = useState(false);
 
   // Interface
   const [aba, setAba] = useState<Aba>("jogar");
+  const [filtroRanking, setFiltroRanking] = useState<TipoJogo>(tipo);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [aviso, setAviso] = useState("");
   const [erroNome, setErroNome] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const recentes = useRef<string[]>([]);
+  const audioRef = useRef<AudioContext | null>(null);
 
   const destaque = DESTAQUES[destaqueId] ?? DESTAQUES.verde;
   const nivel = getNivel(xpTotal + (jogando ? jogo.xp : 0));
-
+  const multiplicador = Math.floor(jogo.combo / 5) + 1;
   const precisao = jogo.tentativas ? Math.round((jogo.acertos / jogo.tentativas) * 100) : 100;
+  const timerAtivo = jogando && !pausado && contagem === null;
 
   // WPM padrão: (caracteres / 5) por minuto, usando o tempo realmente decorrido
   const wpm = useMemo(() => {
@@ -234,16 +284,43 @@ export default function App() {
         trilho: "bg-gray-300",
       };
 
-  /* ---------- Lógica do jogo ---------- */
+  /* ---------- Utilidades de jogo ---------- */
+
+  // Modo código diferencia maiúsculas/símbolos; modo palavras ignora acento e caixa
+  function igual(a: string, b: string) {
+    return tipo === "codigo" ? a === b : normalizar(a) === normalizar(b);
+  }
+
+  function tocar(efeito: Som) {
+    if (!som) return;
+    try {
+      if (!audioRef.current) audioRef.current = new window.AudioContext();
+      const ctx = audioRef.current;
+      const osc = ctx.createOscillator();
+      const ganho = ctx.createGain();
+      const freq: Record<Som, number> = { acerto: 660, erro: 160, combo: 880, fim: 440 };
+      osc.type = efeito === "erro" ? "sawtooth" : "sine";
+      osc.frequency.value = freq[efeito];
+      ganho.gain.setValueAtTime(0.05, ctx.currentTime);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.15);
+      osc.connect(ganho);
+      ganho.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {
+      /* áudio indisponível */
+    }
+  }
 
   function escolherPalavra(progresso: number) {
+    const base = tipo === "codigo" ? CODIGO : PALAVRAS;
     const r = Math.random();
-    let lista = PALAVRAS.facil;
+    let lista = base.facil;
 
     if (progresso >= 20) {
-      lista = r < 0.6 ? PALAVRAS.dificil : r < 0.9 ? PALAVRAS.medio : PALAVRAS.facil;
+      lista = r < 0.6 ? base.dificil : r < 0.9 ? base.medio : base.facil;
     } else if (progresso >= 8) {
-      lista = r < 0.75 ? PALAVRAS.medio : PALAVRAS.facil;
+      lista = r < 0.75 ? base.medio : base.facil;
     }
 
     const filtradas = lista.filter((p) => !recentes.current.includes(p));
@@ -252,6 +329,8 @@ export default function App() {
     recentes.current = [...recentes.current, escolhida].slice(-8);
     return escolhida;
   }
+
+  /* ---------- Lógica do jogo ---------- */
 
   function iniciar() {
     if (nome.trim().length < 2) {
@@ -266,9 +345,11 @@ export default function App() {
     setTempo(modo);
     setDecorrido(0);
     setDigitado("");
+    setPausado(false);
     setPalavra(escolherPalavra(0));
+    setProxima(escolherPalavra(0));
+    setContagem(3);
     setJogando(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   function mostrarAviso(ids: string[]) {
@@ -282,6 +363,8 @@ export default function App() {
 
   function finalizar() {
     setJogando(false);
+    setPausado(false);
+    setContagem(null);
     setDigitado("");
 
     // Partida sem nenhuma palavra enviada não entra no histórico
@@ -289,19 +372,21 @@ export default function App() {
 
     const data = new Date().toLocaleDateString("pt-BR");
 
-    setHistorico((prev) => [
-      ...prev,
-      { data, pontos: jogo.pontos, wpm, precisao, melhorCombo: jogo.melhorCombo },
-    ].slice(-50));
+    setHistorico((prev) =>
+      [...prev, { data, pontos: jogo.pontos, wpm, precisao, melhorCombo: jogo.melhorCombo, tipo }].slice(-50)
+    );
 
     const novoRecorde = jogo.pontos > recordePessoal;
     if (novoRecorde) setRecordePessoal(jogo.pontos);
 
     setRanking((prev) =>
-      [...prev, { nome, avatar, pontos: jogo.pontos, wpm, precisao, modo, data }]
+      [...prev, { nome: nome.trim(), avatar, pontos: jogo.pontos, wpm, precisao, modo, tipo, data }]
         .sort((a, b) => b.pontos - a.pontos)
         .slice(0, 100)
     );
+
+    const nivelAntes = getNivel(xpTotal).nome;
+    const nivelDepois = getNivel(xpTotal + jogo.xp).nome;
 
     setXpTotal((x) => x + jogo.xp);
     setMoedasTotal((m) => m + jogo.moedas);
@@ -313,6 +398,8 @@ export default function App() {
         wpm,
         precisao,
         partidas: historico.length + 1,
+        tipo,
+        modoTempo: modo,
       })
     );
 
@@ -325,22 +412,25 @@ export default function App() {
       moedas: jogo.moedas,
       novoRecorde,
       novas,
+      nivelNovo: nivelDepois !== nivelAntes ? nivelDepois : undefined,
     });
+    setFiltroRanking(tipo);
     setAba("jogar");
+    tocar("fim");
   }
 
   function enviarPalavra(valor: string) {
-    const correta = normalizar(valor.trim()) === normalizar(palavra);
+    const correta = igual(valor.trim(), palavra);
 
     if (correta) {
       const combo = jogo.combo + 1;
-      const multiplicador = Math.floor(combo / 5) + 1;
+      const mult = Math.floor(combo / 5) + 1;
       const novo: Jogo = {
-        pontos: jogo.pontos + multiplicador,
+        pontos: jogo.pontos + mult,
         combo,
         melhorCombo: Math.max(jogo.melhorCombo, combo),
-        xp: jogo.xp + 15 * multiplicador,
-        moedas: jogo.moedas + multiplicador,
+        xp: jogo.xp + 15 * mult,
+        moedas: jogo.moedas + mult,
         acertos: jogo.acertos + 1,
         tentativas: jogo.tentativas + 1,
         caracteres: jogo.caracteres + palavra.length,
@@ -348,14 +438,25 @@ export default function App() {
 
       setJogo(novo);
       setTempo((tp) => Math.min(tp + 1, modo + BONUS_MAX));
+      tocar(combo % 5 === 0 ? "combo" : "acerto");
       mostrarAviso(
-        avaliarConquistas({ melhorCombo: novo.melhorCombo, acertos: novo.acertos, wpm: 0, precisao: 0, partidas: 0 })
+        avaliarConquistas({
+          melhorCombo: novo.melhorCombo,
+          acertos: novo.acertos,
+          wpm: 0,
+          precisao: 0,
+          partidas: 0,
+          tipo,
+          modoTempo: modo,
+        })
       );
-      setPalavra(escolherPalavra(novo.acertos + Math.floor(novo.combo / 2)));
+      setPalavra(proxima);
+      setProxima(escolherPalavra(novo.acertos + Math.floor(novo.combo / 2)));
     } else {
       setJogo({ ...jogo, combo: 0, tentativas: jogo.tentativas + 1 });
       setErro(true);
       setTimeout(() => setErro(false), 300);
+      tocar("erro");
     }
 
     setDigitado("");
@@ -385,6 +486,39 @@ export default function App() {
     setDestaqueId(id);
   }
 
+  /* ---------- Dados: backup e reset ---------- */
+
+  function exportarDados() {
+    const dados: Record<string, string> = {};
+    CHAVES_STORAGE.forEach((k) => {
+      const v = localStorage.getItem(k);
+      if (v !== null) dados[k] = v;
+    });
+    const blob = new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "codespeed-backup.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importarDados(arquivo: File) {
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      try {
+        const dados = JSON.parse(String(leitor.result)) as Record<string, unknown>;
+        CHAVES_STORAGE.forEach((k) => {
+          if (typeof dados[k] === "string") localStorage.setItem(k, dados[k] as string);
+        });
+        window.location.reload();
+      } catch {
+        setAviso("Arquivo de backup inválido.");
+      }
+    };
+    leitor.readAsText(arquivo);
+  }
+
   function zerarDados() {
     if (!window.confirm("Apagar ranking, histórico, XP, moedas e conquistas? Isso não pode ser desfeito.")) return;
     CHAVES_STORAGE.forEach((k) => localStorage.removeItem(k));
@@ -393,32 +527,56 @@ export default function App() {
 
   /* ---------- Efeitos ---------- */
 
-  // Relógio: um único intervalo por partida
+  // Contagem regressiva 3-2-1
   useEffect(() => {
-    if (!jogando) return;
+    if (!jogando || contagem === null) return;
+    const id = setTimeout(() => {
+      if (contagem > 1) {
+        setContagem(contagem - 1);
+      } else {
+        setContagem(null);
+      }
+    }, 800);
+    return () => clearTimeout(id);
+  }, [contagem, jogando]);
+
+  // Relógio: um único intervalo enquanto a partida está ativa
+  useEffect(() => {
+    if (!timerAtivo) return;
     const id = setInterval(() => {
       setTempo((tp) => tp - 1);
       setDecorrido((d) => d + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [jogando]);
+  }, [timerAtivo]);
 
   // Fim de tempo
   useEffect(() => {
-    if (jogando && tempo <= 0) finalizar();
+    if (jogando && contagem === null && tempo <= 0) finalizar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tempo, jogando]);
 
-  // ESC encerra a partida
+  // Devolve o foco ao campo quando a partida começa ou volta da pausa
+  useEffect(() => {
+    if (timerAtivo) inputRef.current?.focus();
+  }, [timerAtivo]);
+
+  // ESC pausa/retoma; trocar de aba do navegador pausa sozinho
   useEffect(() => {
     if (!jogando) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") finalizar();
+      if (e.key === "Escape" && contagem === null) setPausado((p) => !p);
+    };
+    const onVisibilidade = () => {
+      if (document.hidden && contagem === null) setPausado(true);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jogando, jogo, wpm, precisao]);
+    document.addEventListener("visibilitychange", onVisibilidade);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("visibilitychange", onVisibilidade);
+    };
+  }, [jogando, contagem]);
 
   // Some com o aviso de conquista
   useEffect(() => {
@@ -439,6 +597,14 @@ export default function App() {
 
   const ultimas = historico.slice(-10);
   const maiorPontuacao = Math.max(1, ...ultimas.map((p) => p.pontos));
+  const mediaWpm = historico.length
+    ? Math.round(historico.reduce((s, p) => s + p.wpm, 0) / historico.length)
+    : 0;
+  const mediaPrecisao = historico.length
+    ? Math.round(historico.reduce((s, p) => s + p.precisao, 0) / historico.length)
+    : 0;
+  const melhorWpm = Math.max(0, ...historico.map((p) => p.wpm));
+  const rankingFiltrado = ranking.filter((p) => (p.tipo ?? "palavras") === filtroRanking);
 
   return (
     <div className={`min-h-screen p-4 md:p-6 ${t.pagina}`}>
@@ -447,12 +613,21 @@ export default function App() {
         <div className="flex flex-wrap gap-3 justify-between items-center mb-6">
           <h1 className="text-3xl md:text-4xl font-bold">⚡ CodeSpeed Trainer ULTIMATE</h1>
 
-          <button
-            onClick={() => setTemaEscuro(!temaEscuro)}
-            className={`border px-4 py-2 rounded-xl ${t.aba}`}
-          >
-            {temaEscuro ? "☀️ Claro" : "🌙 Escuro"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSom(!som)}
+              className={`border px-4 py-2 rounded-xl ${t.aba}`}
+              aria-label={som ? "Desligar som" : "Ligar som"}
+            >
+              {som ? "🔊" : "🔇"}
+            </button>
+            <button
+              onClick={() => setTemaEscuro(!temaEscuro)}
+              className={`border px-4 py-2 rounded-xl ${t.aba}`}
+            >
+              {temaEscuro ? "☀️ Claro" : "🌙 Escuro"}
+            </button>
+          </div>
         </div>
 
         {aviso && (
@@ -468,7 +643,7 @@ export default function App() {
             <div className={`w-full h-2 rounded-full ${t.trilho}`}>
               <div
                 className={`h-2 rounded-full transition-all ${tempo <= 10 ? "bg-red-500" : destaque.barra}`}
-                style={{ width: `${Math.min(100, (tempo / modo) * 100)}%` }}
+                style={{ width: `${Math.min(100, Math.max(0, (tempo / modo) * 100))}%` }}
               />
             </div>
 
@@ -476,7 +651,7 @@ export default function App() {
               {[
                 ["Tempo", `${Math.max(tempo, 0)}s`],
                 ["Pontos", jogo.pontos],
-                ["Combo", jogo.combo],
+                ["Combo", `${jogo.combo} (x${multiplicador})`],
                 ["Melhor Combo", jogo.melhorCombo],
                 ["Precisão", `${precisao}%`],
                 ["WPM", wpm],
@@ -507,24 +682,49 @@ export default function App() {
 
             <div
               onClick={() => inputRef.current?.focus()}
-              className={`rounded-3xl border p-8 text-center transition-colors ${
+              className={`rounded-3xl border p-8 text-center transition-colors min-h-[9rem] flex flex-col items-center justify-center ${
                 erro ? "border-red-500" : t.card
               }`}
             >
-              <p className="text-4xl md:text-5xl font-bold tracking-wide">
-                {palavra.split("").map((letra, i) => {
-                  const d = digitado[i];
-                  let cor = "opacity-50";
-                  if (d !== undefined) {
-                    cor = normalizar(d) === normalizar(letra) ? destaque.texto : "text-red-500";
-                  }
-                  return (
-                    <span key={i} className={cor}>
-                      {letra}
-                    </span>
-                  );
-                })}
-              </p>
+              {contagem !== null ? (
+                <p className={`text-6xl font-bold ${destaque.texto}`} aria-live="assertive">
+                  {contagem}
+                </p>
+              ) : pausado ? (
+                <div className="space-y-3">
+                  <p className="text-3xl font-bold">⏸️ Pausado</p>
+                  <button
+                    onClick={() => setPausado(false)}
+                    className={`${destaque.botao} text-white px-6 py-2 rounded-xl font-bold`}
+                  >
+                    Continuar (ESC)
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p
+                    className={`text-3xl md:text-5xl font-bold tracking-wide break-all ${
+                      tipo === "codigo" ? "font-mono" : ""
+                    }`}
+                  >
+                    {palavra.split("").map((letra, i) => {
+                      const d = digitado[i];
+                      let cor = "opacity-50";
+                      if (d !== undefined) {
+                        cor = igual(d, letra) ? destaque.texto : "text-red-500";
+                      }
+                      return (
+                        <span key={i} className={cor}>
+                          {letra}
+                        </span>
+                      );
+                    })}
+                  </p>
+                  <p className={`mt-4 text-sm ${t.sub} ${tipo === "codigo" ? "font-mono" : ""}`}>
+                    próxima: {proxima}
+                  </p>
+                </>
+              )}
             </div>
 
             <input
@@ -534,10 +734,13 @@ export default function App() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && digitado.trim()) enviarPalavra(digitado);
               }}
-              placeholder="Digite e pressione espaço ou Enter"
-              className={`w-full p-5 rounded-2xl text-xl border outline-none focus:ring-2 ${t.input} ${
+              disabled={pausado || contagem !== null}
+              placeholder={
+                contagem !== null ? "Prepare-se…" : pausado ? "Jogo pausado" : "Digite e pressione espaço ou Enter"
+              }
+              className={`w-full p-5 rounded-2xl text-xl border outline-none focus:ring-2 disabled:opacity-60 ${t.input} ${
                 erro ? "border-red-500" : ""
-              }`}
+              } ${tipo === "codigo" ? "font-mono" : ""}`}
               autoFocus
               autoComplete="off"
               autoCorrect="off"
@@ -545,10 +748,15 @@ export default function App() {
               spellCheck={false}
             />
 
-            <div className="flex justify-between items-center">
-              <p className={`text-sm ${t.sub}`}>Acentos são opcionais · ESC encerra a partida</p>
+            <div className="flex flex-wrap gap-2 justify-between items-center">
+              <p className={`text-sm ${t.sub}`}>
+                {tipo === "codigo"
+                  ? "Modo código: maiúsculas e símbolos contam"
+                  : "Acentos e maiúsculas são opcionais"}{" "}
+                · ESC pausa
+              </p>
               <button onClick={finalizar} className={`border px-4 py-2 rounded-xl text-sm ${t.aba}`}>
-                Encerrar
+                Encerrar partida
               </button>
             </div>
           </div>
@@ -585,6 +793,11 @@ export default function App() {
                       <p>✨ XP: <strong>+{resultado.xp}</strong></p>
                       <p>🪙 Moedas: <strong>+{resultado.moedas}</strong></p>
                     </div>
+                    {resultado.nivelNovo && (
+                      <p className={`mt-3 text-sm font-bold ${destaque.texto}`}>
+                        ⬆️ Você subiu para {resultado.nivelNovo}!
+                      </p>
+                    )}
                     {resultado.novas.length > 0 && (
                       <p className={`mt-3 text-sm ${destaque.texto}`}>
                         Conquistas novas:{" "}
@@ -630,6 +843,26 @@ export default function App() {
                   <p className="text-sm text-red-500">O nome precisa ter pelo menos 2 caracteres.</p>
                 )}
 
+                <div>
+                  <p className={`text-sm mb-2 ${t.sub}`}>Tipo de jogo</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      ["palavras", "📝 Palavras"],
+                      ["codigo", "💻 Código"],
+                    ] as [TipoJogo, string][]).map(([id, rotulo]) => (
+                      <button
+                        key={id}
+                        onClick={() => setTipo(id)}
+                        className={`py-3 rounded-xl border text-sm ${
+                          tipo === id ? `${destaque.borda} font-bold` : t.aba
+                        }`}
+                      >
+                        {rotulo}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <select
                   value={modo}
                   onChange={(e) => setModo(Number(e.target.value))}
@@ -649,7 +882,7 @@ export default function App() {
 
                 <div className={`rounded-2xl p-5 border text-sm space-y-1 ${t.card}`}>
                   <p>
-                    {avatar} Jogador: <strong>{nome || "Sem nome"}</strong>
+                    {avatar} Jogador: <strong>{nome.trim() || "Sem nome"}</strong>
                   </p>
                   <p>
                     🏅 Nível: <strong>{getNivel(xpTotal).nome}</strong> ({xpTotal} XP)
@@ -671,9 +904,30 @@ export default function App() {
             {aba === "ranking" && (
               <div className={`rounded-2xl p-5 border max-w-xl mx-auto ${t.card}`}>
                 <h2 className="font-bold text-xl mb-3">🏆 Top 100</h2>
-                {ranking.length === 0 && <p className={t.sub}>Nenhuma partida ainda. Jogue para entrar no ranking.</p>}
-                {ranking.slice(0, 20).map((p, i) => (
-                  <div key={i} className="flex justify-between items-center py-2 text-sm border-b border-zinc-700/30 last:border-0">
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {([
+                    ["palavras", "📝 Palavras"],
+                    ["codigo", "💻 Código"],
+                  ] as [TipoJogo, string][]).map(([id, rotulo]) => (
+                    <button
+                      key={id}
+                      onClick={() => setFiltroRanking(id)}
+                      className={`py-2 rounded-xl border text-sm ${
+                        filtroRanking === id ? `${destaque.borda} font-bold` : t.aba
+                      }`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+                {rankingFiltrado.length === 0 && (
+                  <p className={t.sub}>Nenhuma partida neste modo ainda. Jogue para entrar no ranking.</p>
+                )}
+                {rankingFiltrado.slice(0, 20).map((p, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center py-2 text-sm border-b border-zinc-700/30 last:border-0"
+                  >
                     <span>
                       #{i + 1} {p.avatar ?? "🙂"} {p.nome}
                     </span>
@@ -691,11 +945,25 @@ export default function App() {
             {/* ===== Histórico ===== */}
             {aba === "historico" && (
               <div className={`rounded-2xl p-5 border max-w-xl mx-auto ${t.card}`}>
-                <h2 className="font-bold text-xl mb-3">📊 Últimas partidas</h2>
-                {ultimas.length === 0 ? (
+                <h2 className="font-bold text-xl mb-3">📊 Suas estatísticas</h2>
+                {historico.length === 0 ? (
                   <p className={t.sub}>Seu histórico aparece aqui depois da primeira partida.</p>
                 ) : (
                   <>
+                    <div className="grid grid-cols-3 gap-3 mb-5 text-center">
+                      {[
+                        ["WPM médio", mediaWpm],
+                        ["Melhor WPM", melhorWpm],
+                        ["Precisão média", `${mediaPrecisao}%`],
+                      ].map(([titulo, valor]) => (
+                        <div key={String(titulo)} className={`rounded-xl border p-3 ${t.card}`}>
+                          <p className={`text-xs ${t.sub}`}>{titulo}</p>
+                          <p className="text-xl font-bold">{String(valor)}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className={`text-sm mb-2 ${t.sub}`}>Pontos das últimas {ultimas.length} partidas</p>
                     <div className="flex items-end gap-2 h-32 mb-4" aria-label="Pontos das últimas partidas">
                       {ultimas.map((p, i) => (
                         <div key={i} className="flex-1 flex flex-col items-center justify-end h-full">
@@ -709,7 +977,9 @@ export default function App() {
                     </div>
                     {[...ultimas].reverse().map((p, i) => (
                       <div key={i} className="flex justify-between py-1 text-sm">
-                        <span className={t.sub}>{p.data}</span>
+                        <span className={t.sub}>
+                          {p.data} {p.tipo === "codigo" ? "💻" : "📝"}
+                        </span>
                         <span>
                           {p.pontos} pts · {p.wpm} WPM · {p.precisao}% · combo {p.melhorCombo}
                         </span>
@@ -771,9 +1041,34 @@ export default function App() {
                   );
                 })}
 
+                <div className={`rounded-2xl border p-4 mt-6 space-y-3 ${t.card}`}>
+                  <p className="font-bold">Seus dados</p>
+                  <p className={`text-xs ${t.sub}`}>
+                    O progresso fica salvo só neste navegador. Faça um backup para levar para outro lugar.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={exportarDados} className={`border rounded-xl py-2 text-sm ${t.aba}`}>
+                      Exportar backup
+                    </button>
+                    <label className={`border rounded-xl py-2 text-sm text-center cursor-pointer ${t.aba}`}>
+                      Importar backup
+                      <input
+                        type="file"
+                        accept="application/json"
+                        className="hidden"
+                        onChange={(e) => {
+                          const arquivo = e.target.files?.[0];
+                          if (arquivo) importarDados(arquivo);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <button
                   onClick={zerarDados}
-                  className="w-full mt-6 border border-red-500 text-red-500 rounded-xl py-3 text-sm"
+                  className="w-full mt-2 border border-red-500 text-red-500 rounded-xl py-3 text-sm"
                 >
                   Zerar todos os dados
                 </button>
