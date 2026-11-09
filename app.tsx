@@ -9,24 +9,54 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 type ListaPalavras = { facil: string[]; medio: string[]; dificil: string[] };
 
 // Importante: nenhuma palavra pode conter espaço (o espaço envia a palavra).
-const PALAVRAS: ListaPalavras = {
+
+const PALAVRAS = {
   facil: [
     "casa", "mesa", "porta", "janela", "carro", "gato", "cachorro", "praia", "sol", "chuva",
     "livro", "caneta", "escola", "amigo", "família", "banana", "maçã", "futebol", "música", "filme",
     "tempo", "verde", "azul", "pão", "café", "bola", "rua", "cidade", "jogo", "noite",
+
+    "java", "código", "classe", "objeto", "dados", "lista", "texto", "teste", "loop",
+    "array", "html", "css", "site", "web", "bug", "login", "senha", "git", "link",
+    "mouse", "teclado", "tela", "app", "nuvem", "rede", "byte", "pixel", "script"
   ],
+
   medio: [
     "javascript", "backend", "frontend", "algoritmo", "relatório", "dashboard", "faculdade",
     "produtividade", "otimização", "infraestrutura", "desenvolvimento", "persistência",
     "conhecimento", "performance", "repositório", "componente", "variável", "servidor",
-    "requisição", "interface", "biblioteca", "framework",
+    "requisição", "interface", "biblioteca", "framework", "System", "out", "print",
+
+    "programação", "compilador", "implementação", "encapsulamento", "herança",
+    "polimorfismo", "abstração", "instância", "construtor", "metodologia",
+    "recursividade", "estrutura", "condicional", "iterador", "sobrecarga",
+    "exceção", "depuração", "terminal", "console", "package", "import",
+    "springboot", "hibernate", "mysql", "postgresql", "mongodb", "docker",
+    "endpoint", "restapi", "controller", "service", "repository", "entidade",
+    "typescript", "react", "angular", "nodejs", "vite", "tailwind",
+    "autenticação", "autorização", "middleware", "deploy", "pipeline"
   ],
+
   dificil: [
     "cybersecurity", "escalabilidade", "criptografia", "virtualização", "responsabilidade",
-    "empreendedorismo", "extraordinariamente", "internacionalização", "inteligência",
+    "empreendedorismo", "extraordinariamente", "internacionalização", "inteligência artificial",
     "microsserviços", "autenticação", "refatoração", "documentação", "sincronização",
+
+    "arquitetura", "concorrência", "multithreading", "serialização",
+    "desserialização", "inicialização", "interoperabilidade",
+    "descentralização", "disponibilidade", "observabilidade",
+    "containerização", "orquestração", "balanceamento",
+    "inconsistência", "imutabilidade", "genericidade",
+    "programabilidade", "metaprogramação", "paralelismo",
+    "polimorfismo", "inicializador", "desenvolvedor",
+    "autorização", "vulnerabilidade", "middlewares",
+    "microserviços", "dependências", "injeçãodedependência",
+    "machinelearning", "deep learning", "neuralnetwork",
+    "blockchain", "websocket", "loadbalancer",
+    "eventdriven", "designpatterns", "cleanarchitecture"
   ],
 };
+
 
 // Modo código: maiúsculas, minúsculas e símbolos contam.
 const CODIGO: ListaPalavras = {
